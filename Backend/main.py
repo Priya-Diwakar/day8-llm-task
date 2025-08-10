@@ -4,8 +4,17 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
 load_dotenv()
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+client = genai.Client(
+    api_key=GEMINI_API_KEY,
+    http_options=types.HttpOptions(api_version='v1alpha')
+)
 
 # Configure logging
 logging.basicConfig(
@@ -16,7 +25,6 @@ logging.basicConfig(
 app = Flask(__name__)
 CORS(app)
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 @app.route('/')
 def home():
@@ -32,27 +40,15 @@ def llm_query():
     user_text = data.get("text", "").strip()
     if not user_text:
         logging.error("❌ No text provided by client")
-        return jsonify({"error": "Text input is required"}), 400
-
-    url = f"https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key={GEMINI_API_KEY}"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "prompt": {"text": user_text},
-        "temperature": 0.7,
-        "maxOutputTokens": 256,
-    }
+        return jsonify({"error": "Text input is required"}), 40
 
     logging.debug("🌐 Sending request to Gemini API")
     try:
-        response = requests.post(url, headers=headers, json=payload)
+        # response = requests.post(url, headers=headers, json=payload)
+        response = client.models.generate_content(model='gemini-2.0-flash-001', contents=user_text)
         logging.debug(f"🔍 Raw Gemini API response: {response.text}")
 
-        if response.status_code != 200:
-            logging.error(f"❌ Gemini API request failed with status {response.status_code}")
-            return jsonify({"error": "Failed to get response from Gemini API", "details": response.text}), response.status_code
-
-        result = response.json()
-        ai_response = result.get("candidates", [{}])[0].get("output", "")
+        ai_response = response.text
 
         logging.info(f"✅ Gemini API Response: {ai_response}")
         return jsonify({"response": ai_response})
